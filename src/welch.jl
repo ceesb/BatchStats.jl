@@ -32,11 +32,15 @@ function welch_t(x::BatchVariance, y::BatchVariance)
         vxn = vx[i] / nx
         vyn = vy[i] / ny
         denom = vxn + vyn
+        denom = iszero(denom) ? eps(Float64) : denom
 
         tvals[i] = (mx[i] - my[i]) / sqrt(denom)
 
         denom_sq = denom^2
-        dfs[i] = denom_sq / ((vx[i]^2 / (nx^2 * (nx - 1))) + (vy[i]^2 / (ny^2 * (ny - 1))))
+        denom_dfs = ((vx[i]^2 / (nx^2 * (nx - 1))) + 
+                     (vy[i]^2 / (ny^2 * (ny - 1))))
+        denom_dfs = iszero(denom_dfs) ? eps(Float64) : denom_dfs
+        dfs[i] = denom_sq / denom_dfs
 
         pvals[i] = 2 * (1 - cdf(TDist(dfs[i]), abs(tvals[i])))
     end

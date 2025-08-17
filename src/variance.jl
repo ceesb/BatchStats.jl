@@ -8,8 +8,17 @@ struct BatchVariance{T}
     Δx::Vector{T}
 end
 
+export reset!
+function reset!(this::BatchVariance)
+    this.n[] = 0
+    fill!(this.meanx, 0)
+    fill!(this.varx, 0)
+    fill!(this.mx, 0)
+    fill!(this.Δx, 0)
+end
+
 export BatchVariance
-function BatchVariance(nx::Int, ::Type{T}=Float64) where T
+function BatchVariance(nx::Integer, ::Type{T}=Float64) where T
     BatchVariance{T}(
         Ref(0),
         zeros(T, nx),

@@ -16,8 +16,24 @@ struct BatchCorrelation{T}
     Yc::Matrix{T}
 end
 
+export reset!
+function reset!(this::BatchCorrelation)
+    this.n[] = 0
+    fill!(this.meanx, 0)
+    fill!(this.meany, 0)
+    fill!(this.varx, 0)
+    fill!(this.vary, 0)
+    fill!(this.mx, 0)
+    fill!(this.my, 0)
+    fill!(this.Δx, 0)
+    fill!(this.Δy, 0)
+    fill!(this.cov, 0)
+    fill!(this.Xc, 0)
+    fill!(this.Yc, 0)
+end
+
 export BatchCorrelation
-function BatchCorrelation(nx::Int, ny::Int, nbatch::Int=16, ::Type{T}=Float64) where T
+function BatchCorrelation(nx::Integer, ny::Integer, nbatch::Integer=16, ::Type{T}=Float64) where T
     BatchCorrelation{T}(
         Ref(0),
         zeros(T, nx),
