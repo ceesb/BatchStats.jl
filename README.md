@@ -75,6 +75,24 @@ julia> @time BatchStats.cor(X, Y; dims = 2, batchsize = 2048); nothing
  36.121666 seconds (53 allocations: 800.212 MiB, 0.70% gc time)
 ```
 
+On a Mac Air M3 from 2023 `Stastistics.cor` starts swapping, but the `BatchStats.cor` still makes it.
+```
+julia> versioninfo()
+Julia Version 1.11.6
+Commit 9615af0f269 (2025-07-09 12:58 UTC)
+Build Info:
+  Official https://julialang.org/ release
+Platform Info:
+  OS: macOS (arm64-apple-darwin24.0.0)
+  CPU: 8 × Apple M3
+  WORD_SIZE: 64
+  LLVM: libLLVM-16.0.6 (ORCJIT, apple-m2)
+Threads: 1 default, 0 interactive, 1 GC (on 4 virtual cores)
+
+julia> @time BatchStats.cor(X, Y; dims = 2, batchsize = 2048); nothing
+100.757170 seconds (53 allocations: 800.315 MiB, 0.06% gc time)
+```
+
 # Lower level functions
 
 XXX
