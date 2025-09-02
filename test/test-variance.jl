@@ -3,7 +3,6 @@ using Statistics
 using BatchStats
 
 function testvariance()
-    @testset "variance stats" begin
     n = 1000
     nx = 3
     x = rand(nx, n)
@@ -47,5 +46,22 @@ function testvariance()
 
     @test getMean(ic) ≈ mean(hcat(x,x2,x3); dims = 2)
     @test getVariance(ic) ≈ var(hcat(x,x2,x3); dims = 2)
+end
+
+function testvariance_nulladd()
+    n = 1000
+    nx = 3
+    x = rand(nx, n)
+
+    ic = BatchVariance(nx)
+    for i in 1 : n
+        @views add!(ic, x[:, i])
     end
+
+    ic2 = BatchVariance(nx)
+    add!(ic2, ic)
+
+    @test getMean(ic) ≈ getMean(ic2)
+    @test getVariance(ic) ≈ getVariance(ic2)
+
 end

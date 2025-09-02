@@ -37,8 +37,8 @@ function welch_t(x::BatchVariance, y::BatchVariance)
         tvals[i] = (mx[i] - my[i]) / sqrt(denom)
 
         denom_sq = denom^2
-        denom_dfs = ((vx[i]^2 / (nx^2 * (nx - 1))) + 
-                     (vy[i]^2 / (ny^2 * (ny - 1))))
+        denom_dfs = ((vx[i]^2 / (Float64(nx)^2 * (nx - 1))) + 
+                     (vy[i]^2 / (Float64(ny)^2 * (ny - 1))))
         denom_dfs = iszero(denom_dfs) ? eps(Float64) : denom_dfs
         dfs[i] = denom_sq / denom_dfs
 
@@ -48,42 +48,47 @@ function welch_t(x::BatchVariance, y::BatchVariance)
     return WelchTResult(tvals, dfs, pvals)
 end
 
+export welcht_one_vs_rest
+function welcht_one_vs_rest(vars::AbstractArray{BatchVariance})
+    nsamples = length(first(vars).varx)
+    nvars = length(vars)
 
-struct WelchANOVAResult{T}
-    F::Vector{T}
-    df1::T
-    df2::Vector{T}
-    pvalue::Vector{T}
+    others = [BatchVariance(nsamples) for i in 1 : nvars]
+
+    for i in 1 : nvars
+        for j in 1 : nvars
+            if i == j
+                continue
+            end
+
+            add!(others[i], vars[j])
+        end
+    end
+
+    tmatrix = zeros(nsamples, nvars)
+
+    for i in 1 : nvars
+        wt = welch_t(others[i], vars[i])
+        tmatrix[:, i] .= wt.t
+    end
+
+    return tmatrix
 end
 
-export welch_anova
-function welch_anova(groups::Vararg{BatchVariance})
-    k = length(groups)
+export welcht_pairwise
+function welcht_pairwise(vars::AbstractArray{BatchVariance})
+    nsamples = length(first(vars).varx)
+    nvals = length(vars)
+    tmatrix = zeros(nsamples, nvals, nvals)
 
-    # Extract matrix of means and variances: each column is a group
-    means = hcat([getMean(g) for g in groups]...)  # size (d, k)
-    vars = hcat([getVariance(g) for g in groups]...)  # size (d, k)
-    ns = Float64[nobservations(g) for g in groups]  # vector of length k
+    for i in 1 : nvals - 1
+        var1 = vars[vals[i]]
+        for j in i + 1 : nvals
+            var2 = vars[vals[j]]
+            wt = welch_t(var1, var2)
+            tmatrix[:, i, j] = wt.t
+        end
+    end
 
-    d, _ = size(means)
-    weights = ns' .\ vars  # elementwise ns_i / var_ij → size (d, k)
-    total_weight = sum(weights, dims=2)  # size (d, 1)
-    weighted_mean = sum(weights .* means, dims=2) ./ total_weight  # size (d, 1)
-
-    # Numerator: between-group weighted variance
-    A = sum(weights .* (means .- weighted_mean).^2, dims=2) ./ (k - 1)  # size (d, 1)
-
-    # Welch-Satterthwaite denominator correction
-    B_term = ((1 .- weights ./ total_weight).^2) ./ (ns .- 1)'  # size (d, k)
-    B = sum(B_term, dims=2)  # size (d, 1)
-    B_correction = 1 .+ (2 * (k - 2) / (k^2 - 1)) .* B  # size (d, 1)
-
-    F = vec(A ./ B_correction)  # Flatten to Vector{T}
-    df1 = Float64(k - 1)
-    df2 = vec((k^2 - 1) ./ (3 .* B))  # Welch denominator degrees of freedom
-
-    # p-values per dimension
-    p = map((f, df2i) -> 1 - cdf(FDist(df1, df2i), f), F, df2)
-
-    return WelchANOVAResult(F, df1, df2, p)
+    return tmatrix
 end

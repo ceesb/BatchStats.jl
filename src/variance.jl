@@ -49,6 +49,10 @@ function add!(ic::BatchVariance{T}, X::AbstractMatrix) where T
     size(X, 1) == size(ic.meanx, 1) || error("Wrong length x $(size(X, 1)) != $(size(ic.meanx, 1))") 
     nbatch = size(X, 2)
 
+    if nbatch == 0
+        return
+    end
+
     n1 = ic.n[]
     n2 = nbatch
     n = n1 + n2

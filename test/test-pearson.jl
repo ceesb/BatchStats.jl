@@ -3,7 +3,6 @@ using Statistics
 using BatchStats
 
 function testpearson()
-    @testset "pearson stats" begin
     n = 1000
     nx = 3
     ny = 4
@@ -72,5 +71,27 @@ function testpearson()
 
     C3 = getCorrelation(ic)
     @test cor(hcat(x,x2,x3), hcat(y,y2,y3); dims = 2) ≈ C3
+end
+
+
+function testpearson_nulladd()
+    n = 1000
+    nx = 3
+    ny = 4
+    x = rand(nx, n)
+    y = rand(ny, n)
+
+    ic = BatchCorrelation(nx, ny)
+    for i in 1 : n
+        @views add!(ic, x[:, i], y[:, i])
     end
+
+    ic2 = BatchCorrelation(nx, ny)
+    add!(ic2, ic)
+
+    @test getMeanX(ic) ≈ getMeanX(ic2)
+    @test getMeanY(ic) ≈ getMeanY(ic2)
+    @test getVarianceX(ic) ≈ getVarianceX(ic2)
+    @test getVarianceY(ic) ≈ getVarianceY(ic2)
+    @test getCovariance(ic; corrected = true) ≈ getCovariance(ic2; corrected = true)
 end

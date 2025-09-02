@@ -86,3 +86,29 @@ function var(A::AbstractMatrix;
 
     reduce(add!, fetch.(tasks))
 end
+
+function meanvar(samples, data::AbstractMatrix{T}) where {T}
+    ntraces = size(samples, 2)
+    nsamples = size(samples, 1)
+    ndata = size(data, 1)
+    nthreads = Threads.nthreads()
+
+    vars = [Dict{T, BatchVariance}() for row = 1 : ndata, col = 1 : nthreads]
+
+    Threads.@threads for t in ProgressBar(1 : ntraces)
+        tid = Threads.threadid()
+        s = @view(samples[:, t])
+        for i in 1 : ndata
+            v = data[i, t]
+            get!(vars[i, tid], v, BatchVariance(nsamples))
+            add!(vars[i, tid][v], s)
+        end
+    end
+
+    combiner(x,y) = (add!(x, y); x)
+    result = reduce((a,b) -> mergewith(combiner, a, b), vars, dims=2, init=Dict{T,BatchVariance}())
+    avals = [keys(r) |> collect |> sort for r in result]
+    avarsvec = [[result[i][x] for x in vals] for (i, vals) in enumerate(avals)]
+
+    return avals, avarsvec
+end
