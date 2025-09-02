@@ -49,7 +49,7 @@ function welch_t(x::BatchVariance, y::BatchVariance)
 end
 
 export welcht_one_vs_rest
-function welcht_one_vs_rest(vars::AbstractArray{BatchVariance})
+function welcht_one_vs_rest(vars::AbstractVector{T}) where {T <: BatchVariance}
     nsamples = length(first(vars).varx)
     nvars = length(vars)
 
@@ -76,7 +76,7 @@ function welcht_one_vs_rest(vars::AbstractArray{BatchVariance})
 end
 
 export welcht_pairwise
-function welcht_pairwise(vars::AbstractArray{BatchVariance})
+function welcht_pairwise(vars::AbstractVector{T}) where {T <: BatchVariance}
     nsamples = length(first(vars).varx)
     nvals = length(vars)
     tmatrix = zeros(nsamples, nvals, nvals)
