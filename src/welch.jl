@@ -82,9 +82,9 @@ function welcht_pairwise(vars::AbstractVector{T}) where {T <: BatchVariance}
     tmatrix = zeros(nsamples, nvals, nvals)
 
     for i in 1 : nvals - 1
-        var1 = vars[vals[i]]
+        var1 = vars[i]
         for j in i + 1 : nvals
-            var2 = vars[vals[j]]
+            var2 = vars[j]
             wt = welch_t(var1, var2)
             tmatrix[:, i, j] = wt.t
         end

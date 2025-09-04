@@ -3,49 +3,26 @@ using ProgressBars
 using .Threads
 
 function cor(A::AbstractMatrix, B::AbstractMatrix; 
-                dims = ndims(A), 
-                progress = false, 
-                batchsize = 128)
-    @assert dims == ndims(A)
-    nslicesA = prod(size(A, d) for d in dims)
-    nslicesB = prod(size(B, d) for d in dims)
-    nslicesA == nslicesB || error(
-        "number of slices in A $nslicesA not equal to slices in B $nslicesB over dimension $dims")
-    nslices = nslicesA
+                    dims = ndims(A), 
+                    batchsize = 128)
+    @assert dims == 2
 
-    nelems_per_sliceA = div(length(A), nslices)
-    nelems_per_sliceB = div(length(B), nslices)
+    nA, ntraces = size(A)
+    nB, ntraces2 = size(B)
 
-    if progress
-        # bar = Progress(nslices)
-        bar = ProgressBar(1:nslices)
+    @assert ntraces == ntraces2
+
+    cors = [BatchStats.BatchCorrelation(nA, nB, batchsize) for i in 1 : Threads.nthreads()]
+
+    Threads.@threads for t in ProgressBar(1 : batchsize : ntraces)
+        tid = Threads.threadid()
+        e = min(ntraces, t - 1 + batchsize)
+        s = @view(A[:, t : e])
+        d = @view(B[:, t : e])
+        add!(cors[tid], s, d)
     end
 
-    chunk_size = cld(nslices, nthreads())
-
-    tasks = [@spawn begin
-        e = min(j + chunk_size - 1, nslices)
-        m = BatchCorrelation(
-                        nelems_per_sliceA, 
-                        nelems_per_sliceB,
-                        batchsize)
-
-        for i in j : batchsize : e
-            l = min(i - 1 + batchsize, e)
-            add!(m, 
-                @view(A[:, i : l]), 
-                @view(B[:, i : l]))
-
-            if progress
-                # next!(bar; step = nloops)
-                update(bar, l - i + 1)
-            end
-        end
-
-        m
-    end for j in 1 : chunk_size : nslices]
-
-    reduce(add!, fetch.(tasks))
+    reduce(add!, cors)
 end
 
 function var(A::AbstractMatrix; 
@@ -87,7 +64,7 @@ function var(A::AbstractMatrix;
     reduce(add!, fetch.(tasks))
 end
 
-function meanvar(samples, data::AbstractMatrix{T}) where {T}
+function meanvar(samples, data::AbstractMatrix{T}) where {T <: Integer}
     ntraces = size(samples, 2)
     nsamples = size(samples, 1)
     ndata = size(data, 1)
@@ -106,9 +83,33 @@ function meanvar(samples, data::AbstractMatrix{T}) where {T}
     end
 
     combiner(x,y) = (add!(x, y); x)
-    result = reduce((a,b) -> mergewith(combiner, a, b), vars, dims=2, init=Dict{T,BatchVariance}())
+
+    for i in 2 : nthreads
+        for j in 1 : ndata
+            mergewith(combiner, vars[j, 1], vars[j, i])
+        end
+    end
+
+    result = vars[1 : ndata, 1]
     avals = [keys(r) |> collect |> sort for r in result]
     avarsvec = [[result[i][x] for x in vals] for (i, vals) in enumerate(avals)]
 
     return avals, avarsvec
+end
+
+function mergevars(f, vals, vars)
+    k = f(first(vals))
+    nsamples = getMean(first(vars)) |> length
+    d = Dict{typeof(k), BatchVariance}()
+
+    for (i, (val,var)) in enumerate(zip(vals, vars))
+        fv = f(val)
+        get!(d, fv, BatchVariance(nsamples))
+        add!(d[fv], var)
+    end
+
+    vals = Base.keys(d) |> unique |> sort
+    vars = [d[v] for v in vals]
+
+    return vals, vars
 end
