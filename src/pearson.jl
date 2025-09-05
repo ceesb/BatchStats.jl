@@ -83,7 +83,7 @@ function add!(ic::BatchCorrelation{T}, X::AbstractMatrix, Y::AbstractMatrix) whe
     nbatch <= ic.nbatch || error("Too many number of observations in batch: $(nbatch) > $(ic.nbatch)")
 
     if nbatch == 0
-        return
+        return ic
     end
 
     n1 = ic.n[]
@@ -132,7 +132,7 @@ function add!(ic::BatchCorrelation{T}, other::BatchCorrelation{T}) where T
     n1, n2 = ic.n[], other.n[]
 
     if n2 == 0
-        return
+        return ic
     end
     
     n = n1 + n2

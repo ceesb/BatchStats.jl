@@ -50,7 +50,7 @@ function add!(ic::BatchVariance{T}, X::AbstractMatrix) where T
     nbatch = size(X, 2)
 
     if nbatch == 0
-        return
+        return ic
     end
 
     n1 = ic.n[]
@@ -85,6 +85,11 @@ end
 
 function add!(ic::BatchVariance{T}, other::BatchVariance{T}) where T
     n1, n2 = ic.n[], other.n[]
+
+    if n2 == 0
+        return ic
+    end
+    
     n = n1 + n2
     α = n2 / n
     β = (-n2 / n) ^ 2 * n1 + (n1 / n) ^2 * n2
