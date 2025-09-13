@@ -21,4 +21,6 @@ end
 include("test-wrappers.jl")
 testvar()
 testcor()
+testmeanvar()
+
 end

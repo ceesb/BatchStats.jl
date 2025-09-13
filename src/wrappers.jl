@@ -63,6 +63,51 @@ function var(A::AbstractMatrix;
 
     reduce(add!, fetch.(tasks))
 end
+function meanvar(samples, data::AbstractMatrix{UInt8})
+    ntraces = size(samples, 2)
+    nsamples = size(samples, 1)
+    ndata = size(data, 1)
+    nthreads = Threads.nthreads()
+
+    vars = [Vector{BatchVariance}(undef, 256) for row = 1 : ndata, col = 1 : nthreads]
+    cache = [zeros(eltype(samples), nsamples) for i in 1 : nthreads]
+
+    Threads.@threads for t in ProgressBar(1 : ntraces)
+        tid = Threads.threadid()
+        cache[tid] .= @view(samples[:, t])
+        s = cache[tid]
+        for i in 1 : ndata
+            v = data[i, t]
+            j = v + 1
+
+            if !isassigned(vars[i, tid], j)
+                vars[i, tid][j] = BatchVariance(nsamples)
+            end
+
+            add!(vars[i, tid][j], s)
+        end
+    end
+
+    for tid in 2 : nthreads
+        for i in 1 : ndata
+            for j in 1 : 256
+                if isassigned(vars[i, tid], j)
+                    if isassigned(vars[i, 1], j)
+                        add!(vars[i, 1][j], vars[i, tid][j])
+                    else
+                        vars[i, 1][j] = vars[i, tid][j]
+                    end
+                end
+            end
+        end
+    end
+
+    result = vars[1 : ndata, 1]
+    avals = [findall(x -> isassigned(r, x), 1 : 256) .- 1 for r in result]
+    avarsvec = [[result[i][x+1] for x in vals] for (i, vals) in enumerate(avals)]
+
+    return avals, avarsvec
+end
 
 function meanvar(samples, data::AbstractMatrix{T}) where {T <: Integer}
     ntraces = size(samples, 2)

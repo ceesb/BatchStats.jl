@@ -81,7 +81,7 @@ function welcht_pairwise(vars::AbstractVector{T}) where {T <: BatchVariance}
     nvals = length(vars)
     tmatrix = zeros(nsamples, nvals, nvals)
 
-    for i in 1 : nvals - 1
+    Threads.@threads for i in 1 : nvals - 1
         var1 = vars[i]
         for j in i + 1 : nvals
             var2 = vars[j]
