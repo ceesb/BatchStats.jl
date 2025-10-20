@@ -40,7 +40,7 @@ function add!(ic::BatchVariance{T}, x::AbstractVector) where T
 
     @. dx = x - meanx
     @. meanx += β * dx
-    @. ic.varx += α * dx * dx
+    @. ic.varx += α * dx ^ 2
 
     return ic
 end

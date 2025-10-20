@@ -1,146 +1,210 @@
 
-using ProgressBars
-using .Threads
+using Base.Threads
+using ProgressMeter
 
-function cor(A::AbstractMatrix, B::AbstractMatrix; 
-                    dims = ndims(A), 
-                    batchsize = 128)
+function cor(A::AbstractMatrix, B::AbstractMatrix;
+             dims = ndims(A),
+             batchsize::Int = 128,
+             progress::Bool = true)
     @assert dims == 2
-
     nA, ntraces = size(A)
     nB, ntraces2 = size(B)
-
     @assert ntraces == ntraces2
 
-    cors = [BatchStats.BatchCorrelation(nA, nB, batchsize) for i in 1 : Threads.nthreads()]
+    nslices = ntraces
+    ntasks = nthreads()
+    chunk_size = div(nslices, ntasks, RoundUp)
+    pbar = Progress(nslices; enabled = progress, showspeed = true)
+    tasks = Vector{Task}(undef, ntasks)
 
-    Threads.@threads for t in ProgressBar(1 : batchsize : ntraces)
-        tid = Threads.threadid()
-        e = min(ntraces, t - 1 + batchsize)
-        s = @view(A[:, t : e])
-        d = @view(B[:, t : e])
-        add!(cors[tid], s, d)
+    for task_idx in 1:ntasks
+        j = (task_idx - 1)*chunk_size + 1
+        tasks[task_idx] = @spawn begin
+            m = BatchStats.BatchCorrelation(nA, nB, batchsize)
+            e = min(j + chunk_size - 1, nslices)
+            for i in j : batchsize : e
+                l = min(i - 1 + batchsize, e)
+                tr = i:l
+                add!(m, @view(A[:, tr]), @view(B[:, tr]))
+                next!(pbar; step = length(tr))
+            end
+            m
+        end
     end
 
-    reduce(add!, cors)
+    ret = reduce(add!, fetch.(tasks))
+
+    finish!(pbar)
+
+    return ret
 end
 
+
 function var(A::AbstractMatrix; 
-                dims = ndims(A), 
-                progress = false, 
-                batchsize = 128)
-    dims == ndims(A) || 
-        error("only reduction in dims = 2 is recommended because of batch performance, call BatchStats.var(A') if you really want this")
-    nslices = prod(size(A, d) for d in dims)
-    nelems_per_slice = div(length(A), nslices)
-
-    if progress
-        # bar = Progress(nslices)
-        bar = ProgressBar(1:nslices)
-    end
-
-    chunk_size = cld(nslices, nthreads())
+                dims = ndims(A),
+                batchsize = 128,
+                progress = true)
+    @assert dims == 2
+    nA = size(A, 1)
+    nslices = size(A, 2)
+    ntasks = nthreads()
+    chunk_size = div(nslices, ntasks, RoundUp)
+    pbar = Progress(nslices; enabled = progress, showspeed = true)
+    tasks = Vector{Task}(undef, ntasks)
 
     tasks = [@spawn begin
         e = min(j + chunk_size - 1, nslices)
-        m = BatchVariance(
-                        nelems_per_slice)
+        m = BatchVariance(nA)
         
         for i in j : batchsize : e
             l = min(i - 1 + batchsize, e)
-            add!(m, 
-                @view(A[:, i : l]), 
-            )
-
-            if progress
-                # next!(bar; step = nloops)
-                update(bar, nloops)
-            end
+            tr = i : l
+            add!(m, @view(A[:, tr]))
+            next!(pbar; step = length(tr))
         end
 
         m
     end for j in 1 : chunk_size : nslices]
 
-    reduce(add!, fetch.(tasks))
+    ret = reduce(add!, fetch.(tasks))
+
+    finish!(pbar)
+
+    return ret
 end
-function meanvar(samples, data::AbstractMatrix{UInt8})
+
+function meanvar(samples::AbstractArray{T}, data::AbstractMatrix{UInt8};
+                 batchsize = 128,
+                 progress = true) where {T}
+
     ntraces = size(samples, 2)
     nsamples = size(samples, 1)
     ndata = size(data, 1)
-    nthreads = Threads.nthreads()
 
-    vars = [Vector{BatchVariance}(undef, 256) for row = 1 : ndata, col = 1 : nthreads]
-    cache = [zeros(eltype(samples), nsamples) for i in 1 : nthreads]
+    pbar = Progress(ntraces; enabled = progress, showspeed = true)
 
-    Threads.@threads for t in ProgressBar(1 : ntraces)
-        tid = Threads.threadid()
-        cache[tid] .= @view(samples[:, t])
-        s = cache[tid]
-        for i in 1 : ndata
-            v = data[i, t]
-            j = v + 1
+    chunk_size = cld(ntraces, nthreads())
 
-            if !isassigned(vars[i, tid], j)
-                vars[i, tid][j] = BatchVariance(nsamples)
+    tasks = [@spawn begin
+        e = min(j + chunk_size - 1, ntraces)
+
+        # Thread-local accumulators
+        vars  = [Vector{BatchVariance}(undef, 256) for _ in 1:ndata]
+        cache = [Vector{Matrix{T}}(undef, 256) for _ in 1:ndata]
+        cacheidx = fill(0, 256, ndata)
+
+        for t in j:e
+            s = @view(samples[:, t])
+            for i in 1:ndata
+                v = data[i, t]
+                k = v + 1
+
+                if !isassigned(vars[i], k)
+                    vars[i][k] = BatchVariance(nsamples)
+                    cache[i][k] = zeros(T, nsamples, batchsize)
+                end
+
+                cacheidx[k, i] += 1
+                cidx = cacheidx[k, i]
+                cache[i][k][:, cidx] = s
+
+                if cidx == batchsize
+                    cacheidx[k, i] = 0
+                    add!(vars[i][k], cache[i][k])
+                end
             end
 
-            add!(vars[i, tid][j], s)
+            next!(pbar)
         end
-    end
 
-    for tid in 2 : nthreads
-        for i in 1 : ndata
-            for j in 1 : 256
-                if isassigned(vars[i, tid], j)
-                    if isassigned(vars[i, 1], j)
-                        add!(vars[i, 1][j], vars[i, tid][j])
+        # Flush partially filled caches
+        for k in CartesianIndices(cacheidx)
+            if cacheidx[k] != 0
+                jv, i = k.I
+                add!(vars[i][jv], @view(cache[i][jv][:, 1:cacheidx[k]]))
+            end
+        end
+
+        vars
+    end for j in 1:chunk_size:ntraces]
+
+    # Collect partial results and combine
+    vars_chunks = fetch.(tasks)
+
+    # Reduce across tasks
+    result = vars_chunks[1]
+    for chunk in Iterators.drop(vars_chunks, 1)
+        for i in 1:ndata
+            for j in 1:256
+                if isassigned(chunk[i], j)
+                    if isassigned(result[i], j)
+                        add!(result[i][j], chunk[i][j])
                     else
-                        vars[i, 1][j] = vars[i, tid][j]
+                        result[i][j] = chunk[i][j]
                     end
                 end
             end
         end
     end
 
-    result = vars[1 : ndata, 1]
-    avals = [findall(x -> isassigned(r, x), 1 : 256) .- 1 for r in result]
+    # Final compact representation
+    avals = [findall(x -> isassigned(r, x), 1:256) .- 1 for r in result]
     avarsvec = [[result[i][x+1] for x in vals] for (i, vals) in enumerate(avals)]
+
+    finish!(pbar)
 
     return avals, avarsvec
 end
 
-function meanvar(samples, data::AbstractMatrix{T}) where {T <: Integer}
+function meanvar(samples, data::AbstractMatrix{T};
+                    progress = true) where {T}
     ntraces = size(samples, 2)
     nsamples = size(samples, 1)
-    ndata = size(data, 1)
+    ndata   = size(data, 1)
+
     nthreads = Threads.nthreads()
+    chunk_size = cld(ntraces, nthreads)
 
-    vars = [Dict{T, BatchVariance}() for row = 1 : ndata, col = 1 : nthreads]
+    pbar = Progress(ntraces; enabled = progress, showspeed = true)
 
-    Threads.@threads for t in ProgressBar(1 : ntraces)
-        tid = Threads.threadid()
-        s = @view(samples[:, t])
-        for i in 1 : ndata
-            v = data[i, t]
-            get!(vars[i, tid], v, BatchVariance(nsamples))
-            add!(vars[i, tid][v], s)
+    tasks = [@spawn begin
+        # each task has its own independent dictionary array
+        local_vars = [Dict{T, BatchVariance}() for _ in 1:ndata]
+
+        jend = min(j + chunk_size - 1, ntraces)
+        for t in j:jend
+            s = @view(samples[:, t])
+            for i in 1:ndata
+                v = data[i, t]
+                get!(local_vars[i], v, BatchVariance(nsamples))
+                add!(local_vars[i][v], s)
+            end
+            next!(pbar)
+        end
+
+        local_vars
+    end for j in 1:chunk_size:ntraces]
+
+    # gather and combine results from all tasks
+    vars_list = fetch.(tasks)
+    combiner(x, y) = (add!(x, y); x)
+
+    result = vars_list[1]
+    for k in 2:length(vars_list)
+        vars_k = vars_list[k]
+        for j in 1:ndata
+            mergewith(combiner, result[j], vars_k[j])
         end
     end
 
-    combiner(x,y) = (add!(x, y); x)
-
-    for i in 2 : nthreads
-        for j in 1 : ndata
-            mergewith(combiner, vars[j, 1], vars[j, i])
-        end
-    end
-
-    result = vars[1 : ndata, 1]
     avals = [keys(r) |> collect |> sort for r in result]
     avarsvec = [[result[i][x] for x in vals] for (i, vals) in enumerate(avals)]
 
+    finish!(pbar)
+
     return avals, avarsvec
 end
+
 
 function mergevars(f, vals, vars)
     k = f(first(vals))

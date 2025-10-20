@@ -13,13 +13,13 @@ function testvar()
     @test m ≈ Statistics.mean(X; dims = 2)
 end
 
-function testcor()
+function testcor(progress = true)
     nx = 100
     ny = 33
-    nobservations = 1000
+    nobservations = 2000
     X = rand(nx,nobservations)
     Y = rand(ny,nobservations)
-    result = BatchStats.cor(X, Y; dims = 2) 
+    result = BatchStats.cor(X, Y; dims = 2, progress = progress) 
     c = BatchStats.getCorrelation(result)
     @test c ≈ Statistics.cor(X,Y; dims = 2)
 end
@@ -31,10 +31,10 @@ function testmeanvar()
     X = rand(nx, nobservations)
     labels = rand(0:7, ndata, nobservations)
 
-    meanvars = [BatchVariance(nx) for row = 1 : ndata, col = 1 : 8]
+    meanvars = [BatchStats.BatchVariance(nx) for row = 1 : ndata, col = 1 : 8]
     for (col,label) in enumerate(eachcol(labels))
         for (row,data) in enumerate(label)
-            add!(meanvars[row, data + 1], @view(X[:, col]))
+            BatchStats.add!(meanvars[row, data + 1], @view(X[:, col]))
         end
     end
     
@@ -45,8 +45,8 @@ function testmeanvar()
 
     for i = 1 : ndata
         for j = 1 : 8
-            @test getMean(meanvars[i, j]) ≈ getMean(meanvars_[i][j])
-            @test getVariance(meanvars[i, j]) ≈ getVariance(meanvars_[i][j])
+            @test BatchStats.getMean(meanvars[i, j]) ≈ BatchStats.getMean(meanvars_[i][j])
+            @test BatchStats.getVariance(meanvars[i, j]) ≈ BatchStats.getVariance(meanvars_[i][j])
         end
     end
 
@@ -58,8 +58,8 @@ function testmeanvar()
 
     for i = 1 : ndata
         for j = 1 : 8
-            @test getMean(meanvars[i, j]) ≈ getMean(meanvars8_[i][j])
-            @test getVariance(meanvars[i, j]) ≈ getVariance(meanvars8_[i][j])
+            @test BatchStats.getMean(meanvars[i, j]) ≈ BatchStats.getMean(meanvars8_[i][j])
+            @test BatchStats.getVariance(meanvars[i, j]) ≈ BatchStats.getVariance(meanvars8_[i][j])
         end
     end
 
