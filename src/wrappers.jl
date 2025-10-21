@@ -5,14 +5,14 @@ using ProgressMeter
 function cor(A::AbstractMatrix, B::AbstractMatrix;
              dims = ndims(A),
              batchsize::Int = 128,
-             progress::Bool = true)
+             progress::Bool = true,
+             ntasks::Int = 1)
     @assert dims == 2
     nA, ntraces = size(A)
     nB, ntraces2 = size(B)
     @assert ntraces == ntraces2
 
     nslices = ntraces
-    ntasks = nthreads()
     chunk_size = div(nslices, ntasks, RoundUp)
     pbar = Progress(nslices; enabled = progress, showspeed = true)
     tasks = Vector{Task}(undef, ntasks)
@@ -43,11 +43,11 @@ end
 function var(A::AbstractMatrix; 
                 dims = ndims(A),
                 batchsize = 128,
-                progress = true)
+                progress = true,
+                ntasks = 1)
     @assert dims == 2
     nA = size(A, 1)
     nslices = size(A, 2)
-    ntasks = nthreads()
     chunk_size = div(nslices, ntasks, RoundUp)
     pbar = Progress(nslices; enabled = progress, showspeed = true)
     tasks = Vector{Task}(undef, ntasks)
@@ -75,7 +75,8 @@ end
 
 function meanvar(samples::AbstractArray{T}, data::AbstractMatrix{UInt8};
                  batchsize = 128,
-                 progress = true) where {T}
+                 progress = true,
+                 ntasks = 1) where {T}
 
     ntraces = size(samples, 2)
     nsamples = size(samples, 1)
@@ -83,7 +84,7 @@ function meanvar(samples::AbstractArray{T}, data::AbstractMatrix{UInt8};
 
     pbar = Progress(ntraces; enabled = progress, showspeed = true)
 
-    chunk_size = cld(ntraces, nthreads())
+    chunk_size = cld(ntraces, ntasks)
 
     tasks = [@spawn begin
         e = min(j + chunk_size - 1, ntraces)

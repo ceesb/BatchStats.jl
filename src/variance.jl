@@ -8,6 +8,12 @@ struct BatchVariance{T}
     Δx::Vector{T}
 end
 
+function Base.show(io::IO, x::BatchVariance)
+    nobs = nobservations(x)
+    nx = length(x.mx)
+    print(io, "BatchVariance, $(nx) samples, $(nobs) observations")
+end
+
 export reset!
 function reset!(this::BatchVariance)
     this.n[] = 0

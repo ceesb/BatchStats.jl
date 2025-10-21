@@ -51,6 +51,13 @@ function BatchCorrelation(nx::Integer, ny::Integer, nbatch::Integer=16, ::Type{T
     )
 end
 
+function Base.show(io::IO, x::BatchCorrelation)
+    nobs = nobservations(x)
+    nx = length(x.mx)
+    ny = length(x.my)
+    print(io, "BatchCorrelation, $(nx) by $(ny) samples, $(nobs) observations")
+end
+
 export add!
 function add!(ic::BatchCorrelation{T}, x::AbstractVector, y::AbstractVector) where T
     size(x, 1) == size(ic.meanx, 1) || error("Wrong length x $(size(x, 1)) != $(size(ic.meanx, 1))") 
