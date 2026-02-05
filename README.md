@@ -1,20 +1,52 @@
 # BatchStats
 
-A few first-order statistics in Julia supporting incremental (1 sample), batch (n samples), aggregate (a whole other state) updates.
+A few first-order statistics in Julia supporting three update modes: incremental (single observations), batch (multiple observations at once), and aggregate (combining statistics). Constant memory complexity independent of the number of observations.
 
 Supports:
 - mean / variance
 - covariance / pearson's correlation
 - welch's t-statistic
 
-These implementations are constant memory, i.e. the state size is independent of the number of observations you're feeding into it. There are other Julia packages that do (way more) incremental statistics, for example `OnlineStats`. The difference with `OnlineStats` that it does not do batch updates. Batch updates are faster than single updates.
+These implementations are constant memory, i.e. the internal state size is independent of the number of observations fed into it. There are other Julia packages that do (way more) incremental statistics, for example `OnlineStats`. The difference with `OnlineStats` that it does not do batch updates. Updates of batches of observations are faster than single observation updates.
 
 # Examples
 
-XXX FIXME
+First, a Pearson correlation example.
 
 ```julia
-import Statistics
+using BatchStats
+
+nx = 13
+ny = 15
+batchsize = 128
+
+ic = BatchCorrelation(nx, ny, batchsize)
+
+# incremental update
+add!(ic, rand(nx), rand(ny))
+
+# batch update
+add!(ic, rand(nx, batchsize), rand(ny, batchsize))
+
+# you can add less than batchsize but not more, in one call
+add!(ic, rand(nx, batchsize - 10), rand(ny, batchsize - 10))
+
+# get the correlation statistic
+Cr = getCorrelation(ic)
+
+# or the covariance matrix
+Cv = getCovariance(ic)
+
+# or the means and variances
+Mx = getMeanX(ic)
+My = getMeanY(ic)
+Vx = getVarianceX(ic)
+Vy = getVarianceY(ic)
+```
+
+If you just want a replacement for the `Statistics` correlation `cor` (or variance `var`), you can do the following. Note that `cor` and `var` are not exported so to not conflict the `Statistics` versions.
+
+```julia
 import BatchStats
 
 nx = 100
@@ -23,10 +55,6 @@ nobservations = 1000
 X = rand(nx,nobservations)
 Y = rand(ny,nobservations)
 result = BatchStats.cor(X, Y; dims = 2)
-
-@assert Statistics.cor(X, Y; dims = 2) ≈ BatchStats.getCorrelation(result)
-@time Statistics.cor(X, Y; dims = 2)
-@time BatchStats.cor(X, Y; dims = 2)
 ```
 
 # Performance
@@ -92,7 +120,3 @@ Threads: 1 default, 0 interactive, 1 GC (on 4 virtual cores)
 julia> @time BatchStats.cor(X, Y; dims = 2, batchsize = 2048); nothing
 100.757170 seconds (53 allocations: 800.315 MiB, 0.06% gc time)
 ```
-
-# Lower level functions
-
-XXX

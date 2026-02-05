@@ -6,8 +6,15 @@ struct WelchTResult{T}
     pvalue::Vector{T}
 end
 
-export welch_t
-function welch_t(x::BatchVariance, y::BatchVariance)
+export welcht
+"""
+`welcht(x::BatchVariance, y::BatchVariance)`
+
+Computes the Welch-t statistics between `x` and `y`.
+
+Returns a struct with fields `t` containing the Welch-t values, `df` containing the degrees of freedom, and `pvalue` containing the p-values.
+"""
+function welcht(x::BatchVariance, y::BatchVariance)
     mx = getMean(x)
     my = getMean(y)
     vx = getVariance(x)
@@ -49,6 +56,13 @@ function welch_t(x::BatchVariance, y::BatchVariance)
 end
 
 export welcht_one_vs_rest
+"""
+`welcht_one_vs_rest(vars::AbstractVector{BatchVariance})`
+
+Computes the Welch-t statistics of each element of vars versus all other elements combined. All elements of `vars` should be a variance statistic over the same number of samples `nsamples`.
+
+Returns a matrix of `nsamples` vs `length(vars)` with Welch-t values where every column `i` are the Welch-t values of `vars[i]` vs all other entries of vars combined.
+"""
 function welcht_one_vs_rest(vars::AbstractVector{T}) where {T <: BatchVariance}
     nsamples = length(first(vars).varx)
     nvars = length(vars)
@@ -68,7 +82,7 @@ function welcht_one_vs_rest(vars::AbstractVector{T}) where {T <: BatchVariance}
     tmatrix = zeros(nsamples, nvars)
 
     for i in 1 : nvars
-        wt = welch_t(others[i], vars[i])
+        wt = welcht(others[i], vars[i])
         tmatrix[:, i] .= wt.t
     end
 
@@ -76,6 +90,13 @@ function welcht_one_vs_rest(vars::AbstractVector{T}) where {T <: BatchVariance}
 end
 
 export welcht_pairwise
+"""
+`welcht_pairwise(vars::AbstractVector{BatchVariance})`
+
+Computes the Welch-t statistics of each element of vars versus each other element. All elements of `vars` should be a variance statistic over the same number of samples `nsamples`.
+
+Returns a 3d array of `nsamples` vs `length(vars)` vs `length(vars)`. Every column `[:, i, j]` is the pairwise Welch-t between `vars[i]` and `vars[j]`. We only populate where `j > i`.
+"""
 function welcht_pairwise(vars::AbstractVector{T}) where {T <: BatchVariance}
     nsamples = length(first(vars).varx)
     nvals = length(vars)
@@ -85,7 +106,7 @@ function welcht_pairwise(vars::AbstractVector{T}) where {T <: BatchVariance}
         var1 = vars[i]
         for j in i + 1 : nvals
             var2 = vars[j]
-            wt = welch_t(var1, var2)
+            wt = welcht(var1, var2)
             tmatrix[:, i, j] = wt.t
         end
     end

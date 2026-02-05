@@ -17,6 +17,9 @@ struct BatchCorrelation{T}
 end
 
 export reset!
+"""
+Resets the statistics to uninitialized, useful for parallel use cases.
+"""
 function reset!(this::BatchCorrelation)
     this.n[] = 0
     fill!(this.meanx, 0)
@@ -33,6 +36,11 @@ function reset!(this::BatchCorrelation)
 end
 
 export BatchCorrelation
+"""
+`BatchCorrelation(nx::Integer, ny::Integer, nbatch::Integer=16)`
+
+Initializes the BatchCorrelation matrix for `nx` by `ny` samples, upto `nbatch` observations can be added in a single `add!` call.
+"""
 function BatchCorrelation(nx::Integer, ny::Integer, nbatch::Integer=16, ::Type{T}=Float64) where T
     BatchCorrelation{T}(
         Ref(0),
@@ -59,6 +67,11 @@ function Base.show(io::IO, x::BatchCorrelation)
 end
 
 export add!
+"""
+`add!(ic::BatchCorrelation, x::AbstractVector, y::AbstractVector)`
+
+Updates the correlation statistics with a single observation of `x` and `y`.
+"""
 function add!(ic::BatchCorrelation{T}, x::AbstractVector, y::AbstractVector) where T
     size(x, 1) == size(ic.meanx, 1) || error("Wrong length x $(size(x, 1)) != $(size(ic.meanx, 1))") 
     size(y, 1) == size(ic.meany, 1) || error("Wrong length y $(size(y, 1)) != $(size(ic.meany, 1))") 
@@ -82,6 +95,12 @@ function add!(ic::BatchCorrelation{T}, x::AbstractVector, y::AbstractVector) whe
     return ic
 end
 
+export add!
+"""
+`add!(ic::BatchCorrelation, X::AbstractMatrix, Y::AbstractMatrix)`
+
+Updates the correlation statistics with a batch of observations of `X` and `Y`. Every column is an observation.
+"""
 function add!(ic::BatchCorrelation{T}, X::AbstractMatrix, Y::AbstractMatrix) where T
     size(X, 1) == size(ic.meanx, 1) || error("Wrong length x $(size(X, 1)) != $(size(ic.meanx, 1))") 
     size(Y, 1) == size(ic.meany, 1) || error("Wrong length y $(size(Y, 1)) != $(size(ic.meany, 1))") 
@@ -134,7 +153,12 @@ function add!(ic::BatchCorrelation{T}, X::AbstractMatrix, Y::AbstractMatrix) whe
     return ic
 end
 
+export add!
+"""
+`add!(ic::BatchCorrelation, other::BatchCorrelation)`
 
+Updates the correlation statistics in `ic` with the statistics in `other`.
+"""
 function add!(ic::BatchCorrelation{T}, other::BatchCorrelation{T}) where T
     n1, n2 = ic.n[], other.n[]
 
@@ -169,28 +193,45 @@ function add!(ic::BatchCorrelation{T}, other::BatchCorrelation{T}) where T
 end
 
 export getMeanX
+"""
+Returns the mean of the X variable.
+"""
 function getMeanX(ic::BatchCorrelation)
     return ic.meanx
 end
 
 export getVarianceX
+"""
+Returns the variance of the X variable.
+"""
 function getVarianceX(ic::BatchCorrelation)
     v = 1 / (ic.n[] - 1) .* ic.varx
     return v
 end
 
 export getMeanY
+"""
+Returns the mean of the Y variable.
+"""
 function getMeanY(ic::BatchCorrelation)
     return ic.meany
 end
 
 export getVarianceY
+"""
+Returns the variance of the Y variable.
+"""
 function getVarianceY(ic::BatchCorrelation)
     v = 1 / (ic.n[] - 1) .* ic.vary
     return v
 end
 
 export getCovariance
+"""
+`getCovariance(ic::BatchCorrelation{T}; corrected = true)`
+
+Returns the covariance matrix, `corrected` means `1/(n-1)` correction factor, otherwise `1/n` where `n` is the number of observations.
+"""
 function getCovariance(ic::BatchCorrelation{T}; corrected = true) where {T}
     if corrected
         return ic.cov .* 1/(ic.n[] - 1)
@@ -200,6 +241,9 @@ function getCovariance(ic::BatchCorrelation{T}; corrected = true) where {T}
 end
 
 export getCorrelation
+"""
+Return Pearson's correlation matrix.
+"""
 function getCorrelation(ic::BatchCorrelation{T}) where T
     stdx = sqrt.(getVarianceX(ic))
     stdy = sqrt.(getVarianceY(ic))
@@ -215,5 +259,8 @@ function getCorrelation(ic::BatchCorrelation{T}) where T
 end
 
 export nobservations
+"""
+The number of observations in the statistic.
+"""
 nobservations(ic::BatchCorrelation) = ic.n[]
 

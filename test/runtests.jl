@@ -12,7 +12,7 @@ testvariance()
 testvariance_nulladd()
 end
 
-@testset "welch_t stats" begin
+@testset "welcht stats" begin
 include("test-welcht.jl")
 testwelcht()
 end

@@ -24,7 +24,7 @@ function testwelcht()
     end
 
     # Call your implementation
-    result = welch_t(x, y)
+    result = welcht(x, y)
 
     # Compare each variable independently with HypothesisTests
     for i in 1:size(X,1)
