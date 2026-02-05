@@ -1,5 +1,5 @@
 # docs/make.jl
-using Documenter, TRSFiles
+using Documenter, BatchStats
 
 makedocs(
     sitename = "BatchStats.jl",
