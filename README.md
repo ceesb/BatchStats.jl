@@ -1,3 +1,5 @@
+[![](https://img.shields.io/badge/docs-green.svg)](https://ceesb.github.io/BatchStats.jl/)
+
 # BatchStats
 
 A few first-order statistics in Julia supporting three update modes: incremental (single observations), batch (multiple observations at once), and aggregate (combining statistics). Constant memory complexity independent of the number of observations.
